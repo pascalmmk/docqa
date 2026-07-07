@@ -6,6 +6,7 @@ import type { Config } from "./config.js";
 import type { UserResolver } from "./auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { documentRoutes, type DocumentsDeps } from "./routes/documents.js";
+import { conversationRoutes, type ConversationsDeps } from "./routes/conversations.js";
 
 export interface ServerDeps {
   config: Config;
@@ -15,10 +16,12 @@ export interface ServerDeps {
   resolveUser?: UserResolver;
   /** When provided, document routes are registered. */
   documents?: DocumentsDeps;
+  /** When provided, conversation/chat routes are registered. */
+  conversations?: ConversationsDeps;
 }
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const { config, checkReadiness, resolveUser, documents } = deps;
+  const { config, checkReadiness, resolveUser, documents, conversations } = deps;
 
   const app = Fastify({
     logger: {
@@ -49,7 +52,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     checkReadiness: checkReadiness ?? (async () => true),
   });
 
-  if (documents) {
+  if (documents || conversations) {
     app.register(async (authed) => {
       authed.addHook("preHandler", async (req, reply) => {
         const userId = resolveUser ? await resolveUser(req) : null;
@@ -61,7 +64,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         }
         req.userId = userId;
       });
-      await documentRoutes(authed, documents);
+      if (documents) await documentRoutes(authed, documents);
+      if (conversations) await conversationRoutes(authed, conversations);
     });
   }
 

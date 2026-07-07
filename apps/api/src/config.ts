@@ -8,6 +8,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   REDIS_URL: z.string().optional(),
   DATA_DIR: z.string().default("./data"),
+  OPENAI_API_KEY: z.string().optional(),
+  CHAT_MODEL: z.string().default("gpt-4o-mini"),
 });
 
 export type Config = z.infer<typeof envSchema>;

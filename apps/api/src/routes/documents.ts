@@ -4,12 +4,15 @@ import { MAX_UPLOAD_BYTES } from "@docqa/shared";
 import { storageKey, type FileStorage } from "@docqa/storage";
 import type { DocumentsRepo, DocumentRow } from "../repositories/documents.js";
 import type { IngestQueue } from "../queue.js";
+import type { RateLimiter } from "../ratelimit.js";
+import { allowAll } from "../ratelimit.js";
 import { sniffFileType } from "../sniff.js";
 
 export interface DocumentsDeps {
   documents: DocumentsRepo;
   storage: FileStorage;
   queue: IngestQueue;
+  uploadLimiter?: RateLimiter;
 }
 
 function toDto(d: DocumentRow) {
@@ -25,8 +28,17 @@ function toDto(d: DocumentRow) {
 
 export async function documentRoutes(app: FastifyInstance, deps: DocumentsDeps) {
   const { documents, storage, queue } = deps;
+  const uploadLimiter = deps.uploadLimiter ?? allowAll();
 
   app.post("/documents", async (req, reply) => {
+    const limit = await uploadLimiter.consume(req.userId);
+    if (!limit.allowed) {
+      return reply
+        .status(429)
+        .header("retry-after", String(limit.retryAfterSec ?? 3600))
+        .send({ title: "upload rate limit exceeded", status: 429 });
+    }
+
     const file = await req.file();
     if (!file) {
       return reply.status(400).send({ title: "multipart file field required", status: 400 });

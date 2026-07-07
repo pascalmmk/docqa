@@ -142,6 +142,23 @@ describe("documents CRUD", () => {
     expect((await ctx.app.inject({ method: "GET", url: `/documents/${created.id}` })).statusCode).toBe(404);
   });
 
+  it("429 when upload rate limit exceeded", async () => {
+    const app = buildServer({
+      config,
+      resolveUser: async () => USER,
+      documents: {
+        documents: memoryRepo(),
+        storage: fakeStorage(),
+        queue: fakeQueue(),
+        uploadLimiter: { consume: async () => ({ allowed: false, retryAfterSec: 900 }) },
+      },
+    });
+    const { body, headers } = multipartBody("a.txt", Buffer.from("aaa"));
+    const res = await app.inject({ method: "POST", url: "/documents", headers, body });
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["retry-after"]).toBe("900");
+  });
+
   it("401 when user cannot be resolved", async () => {
     const app = buildServer({
       config,
