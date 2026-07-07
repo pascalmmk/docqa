@@ -10,7 +10,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "migrate": "pnpm --filter @docqa/api migrate"
+    "migrate": "pnpm --filter @docqa/api migrate",
+    "eval": "pnpm --filter @docqa/api eval"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

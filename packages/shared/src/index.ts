@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./chunk.js";
+
 export const documentStatusSchema = z.enum(["queued", "processing", "ready", "failed"]);
 export type DocumentStatus = z.infer<typeof documentStatusSchema>;
 

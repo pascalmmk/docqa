@@ -1,0 +1,31 @@
+name: Retrieval Eval
+
+# Runs the retrieval eval when a PR touches anything that affects
+# retrieval quality. Requires DATABASE_URL + OPENAI_API_KEY repo secrets;
+# the script exits 0 with a notice if they're absent (e.g. fork PRs).
+on:
+  pull_request:
+    paths:
+      - "apps/api/src/retrieval.ts"
+      - "apps/api/src/prompt.ts"
+      - "apps/api/src/eval/**"
+      - "packages/shared/src/chunk.ts"
+      - "apps/worker/src/pipeline.ts"
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "./packages/*" build
+      - run: pnpm eval
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

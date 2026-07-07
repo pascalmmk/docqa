@@ -25,6 +25,27 @@ export function openaiQuestionEmbedder(apiKey: string, model = EMBEDDING_MODEL):
   };
 }
 
+/** Batch embeddings (used by the eval harness for fixture ingestion). */
+export async function openaiEmbedBatch(
+  apiKey: string,
+  texts: string[],
+  model = EMBEDDING_MODEL,
+  batchSize = 64,
+): Promise<number[][]> {
+  const out: number[][] = [];
+  for (let i = 0; i < texts.length; i += batchSize) {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ model, input: texts.slice(i, i + batchSize) }),
+    });
+    if (!res.ok) throw new Error(`embeddings API ${res.status}`);
+    const json = (await res.json()) as { data: { index: number; embedding: number[] }[] };
+    out.push(...json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding));
+  }
+  return out;
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
