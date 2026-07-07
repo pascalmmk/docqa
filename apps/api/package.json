@@ -14,6 +14,7 @@
   "dependencies": {
     "@docqa/shared": "workspace:*",
     "@docqa/storage": "workspace:*",
+    "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",
     "bullmq": "^5.34.0",
     "fastify": "^5.0.0",

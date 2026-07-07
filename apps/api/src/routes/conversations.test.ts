@@ -29,8 +29,21 @@ function memoryConversations() {
       convos.push(row);
       return row;
     },
+    async listByUser(userId) {
+      return convos.filter((c) => c.user_id === userId);
+    },
     async getById(userId, id) {
       return convos.find((c) => c.user_id === userId && c.id === id) ?? null;
+    },
+    async setTitle(conversationId, title) {
+      const c = convos.find((x) => x.id === conversationId);
+      if (c) c.title = title;
+    },
+    async remove(userId, id) {
+      const i = convos.findIndex((c) => c.user_id === userId && c.id === id);
+      if (i < 0) return false;
+      convos.splice(i, 1);
+      return true;
     },
     async messagesWithCitations(conversationId) {
       return messages
@@ -118,6 +131,27 @@ describe("conversations", () => {
     const fetched = await app.inject({ method: "GET", url: `/conversations/${id}` });
     expect(fetched.statusCode).toBe(200);
     expect(fetched.json().messages).toEqual([]);
+  });
+
+  it("lists conversations, titles them from the first question, deletes them", async () => {
+    const { app } = makeApp();
+    const convoId = (
+      await app.inject({ method: "POST", url: "/conversations", payload: {} })
+    ).json().id;
+
+    await app.inject({
+      method: "POST",
+      url: `/conversations/${convoId}/messages`,
+      payload: { question: "What is the capital of France?" },
+    });
+
+    const list = (await app.inject({ method: "GET", url: "/conversations" })).json();
+    expect(list).toHaveLength(1);
+    expect(list[0].title).toBe("What is the capital of France?");
+
+    const del = await app.inject({ method: "DELETE", url: `/conversations/${convoId}` });
+    expect(del.statusCode).toBe(204);
+    expect((await app.inject({ method: "GET", url: "/conversations" })).json()).toHaveLength(0);
   });
 
   it("streams sources, tokens, done — and persists message + citations", async () => {

@@ -1,4 +1,5 @@
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { randomUUID } from "node:crypto";
 import { MAX_UPLOAD_BYTES } from "@docqa/shared";
@@ -45,6 +46,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         instance: req.url,
       });
   });
+
+  // Demo-friendly CORS: reflect any origin (no cookies in play yet).
+  // Tighten to the deployed web origin when OAuth lands.
+  app.register(cors, { origin: true, exposedHeaders: ["retry-after"] });
 
   app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 

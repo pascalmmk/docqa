@@ -13,11 +13,15 @@ export interface ConversationsDeps {
   questionLimiter: RateLimiter;
 }
 
-function sse(reply: FastifyReply) {
+function sse(reply: FastifyReply, origin: string | undefined) {
+  // We write to the raw socket, bypassing Fastify's reply pipeline —
+  // so the CORS plugin can't help here; set the header ourselves.
+  reply.hijack();
   reply.raw.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
     connection: "keep-alive",
+    "access-control-allow-origin": origin ?? "*",
   });
   return {
     send(event: object) {
@@ -40,6 +44,21 @@ export async function conversationRoutes(app: FastifyInstance, deps: Conversatio
       title: convo.title,
       createdAt: convo.created_at.toISOString(),
     });
+  });
+
+  app.get("/conversations", async (req) => {
+    const rows = await conversations.listByUser(req.userId);
+    return rows.map((c) => ({
+      id: c.id,
+      title: c.title,
+      createdAt: c.created_at.toISOString(),
+    }));
+  });
+
+  app.delete<{ Params: { id: string } }>("/conversations/:id", async (req, reply) => {
+    const removed = await conversations.remove(req.userId, req.params.id);
+    if (!removed) return reply.status(404).send({ title: "conversation not found", status: 404 });
+    return reply.status(204).send();
   });
 
   app.get<{ Params: { id: string } }>("/conversations/:id", async (req, reply) => {
@@ -80,13 +99,18 @@ export async function conversationRoutes(app: FastifyInstance, deps: Conversatio
       const convo = await conversations.getById(req.userId, req.params.id);
       if (!convo) return reply.status(404).send({ title: "conversation not found", status: 404 });
 
+      // First question becomes the conversation title.
+      if (!convo.title) {
+        await conversations.setTitle(convo.id, question.slice(0, 80));
+      }
+
       // Gather context BEFORE persisting the new question, so history
       // contains prior turns only.
       const history = await conversations.recentMessages(convo.id, HISTORY_LIMIT);
       const chunks = await retriever(req.userId, question);
       await conversations.addMessage(convo.id, "user", question);
 
-      const stream = sse(reply);
+      const stream = sse(reply, req.headers.origin);
       // Sources first, so the client can render citations as tokens arrive —
       // and so retrieval results stay visible even if the LLM is down.
       stream.send({

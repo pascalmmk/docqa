@@ -21,7 +21,10 @@ export interface MessageWithCitations extends MessageRow {
 
 export interface ConversationsRepo {
   create(userId: string, title?: string): Promise<ConversationRow>;
+  listByUser(userId: string): Promise<ConversationRow[]>;
   getById(userId: string, id: string): Promise<ConversationRow | null>;
+  setTitle(conversationId: string, title: string): Promise<void>;
+  remove(userId: string, id: string): Promise<boolean>;
   messagesWithCitations(conversationId: string): Promise<MessageWithCitations[]>;
   recentMessages(conversationId: string, limit: number): Promise<MessageRow[]>;
   addMessage(conversationId: string, role: "user" | "assistant", content: string): Promise<MessageRow>;
@@ -38,12 +41,35 @@ export function pgConversationsRepo(pool: pg.Pool): ConversationsRepo {
       return rows[0]!;
     },
 
+    async listByUser(userId) {
+      const { rows } = await pool.query<ConversationRow>(
+        `SELECT * FROM conversations WHERE user_id = $1 ORDER BY created_at DESC`,
+        [userId],
+      );
+      return rows;
+    },
+
     async getById(userId, id) {
       const { rows } = await pool.query<ConversationRow>(
         `SELECT * FROM conversations WHERE user_id = $1 AND id = $2`,
         [userId, id],
       );
       return rows[0] ?? null;
+    },
+
+    async setTitle(conversationId, title) {
+      await pool.query(`UPDATE conversations SET title = $2 WHERE id = $1`, [
+        conversationId,
+        title,
+      ]);
+    },
+
+    async remove(userId, id) {
+      const { rowCount } = await pool.query(
+        `DELETE FROM conversations WHERE user_id = $1 AND id = $2`,
+        [userId, id],
+      );
+      return (rowCount ?? 0) > 0;
     },
 
     async messagesWithCitations(conversationId) {
