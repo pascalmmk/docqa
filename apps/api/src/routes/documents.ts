@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { MAX_UPLOAD_BYTES } from "@docqa/shared";
+import { storageKey, type FileStorage } from "@docqa/storage";
 import type { DocumentsRepo, DocumentRow } from "../repositories/documents.js";
-import type { FileStorage } from "../storage.js";
 import type { IngestQueue } from "../queue.js";
 import { sniffFileType } from "../sniff.js";
 
@@ -21,10 +21,6 @@ function toDto(d: DocumentRow) {
     error: d.error,
     createdAt: d.created_at.toISOString(),
   };
-}
-
-export function storageKey(userId: string, contentHash: string): string {
-  return `${userId}/${contentHash}`;
 }
 
 export async function documentRoutes(app: FastifyInstance, deps: DocumentsDeps) {

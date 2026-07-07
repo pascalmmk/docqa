@@ -7,11 +7,13 @@ FROM base AS build
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/storage/package.json packages/storage/
 COPY apps/api/package.json apps/api/
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
+COPY packages/storage packages/storage
 COPY apps/api apps/api
-RUN pnpm --filter @docqa/shared build && pnpm --filter @docqa/api build
+RUN pnpm --filter @docqa/shared build && pnpm --filter @docqa/storage build && pnpm --filter @docqa/api build
 RUN pnpm --filter @docqa/api --prod deploy /out
 
 FROM node:22-slim AS runtime

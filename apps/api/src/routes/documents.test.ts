@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
+import type { FileStorage } from "@docqa/storage";
 import { buildServer } from "../server.js";
 import { loadConfig } from "../config.js";
 import type { DocumentsRepo, DocumentRow, IngestEventRow } from "../repositories/documents.js";
-import type { FileStorage } from "../storage.js";
 import type { IngestQueue } from "../queue.js";
 
 const config = loadConfig({ NODE_ENV: "test", LOG_LEVEL: "error" });
@@ -44,24 +44,34 @@ function memoryRepo(): DocumentsRepo & { rows: DocumentRow[] } {
   };
 }
 
-function testApp(repo = memoryRepo()) {
-  const saved: string[] = [];
-  const enqueued: string[] = [];
-  const storage: FileStorage = {
+function fakeStorage(saved: string[] = []): FileStorage {
+  return {
     async save(key) {
       saved.push(key);
     },
+    async get() {
+      return Buffer.alloc(0);
+    },
     async remove() {},
   };
-  const queue: IngestQueue = {
+}
+
+function fakeQueue(enqueued: string[] = []): IngestQueue {
+  return {
     async enqueue(id) {
       enqueued.push(id);
     },
+    async close() {},
   };
+}
+
+function testApp(repo = memoryRepo()) {
+  const saved: string[] = [];
+  const enqueued: string[] = [];
   const app = buildServer({
     config,
     resolveUser: async () => USER,
-    documents: { documents: repo, storage, queue },
+    documents: { documents: repo, storage: fakeStorage(saved), queue: fakeQueue(enqueued) },
   });
   return { app, repo, saved, enqueued };
 }
@@ -136,7 +146,7 @@ describe("documents CRUD", () => {
     const app = buildServer({
       config,
       resolveUser: async () => null,
-      documents: { documents: memoryRepo(), storage: { save: async () => {}, remove: async () => {} }, queue: { enqueue: async () => {} } },
+      documents: { documents: memoryRepo(), storage: fakeStorage(), queue: fakeQueue() },
     });
     const res = await app.inject({ method: "GET", url: "/documents" });
     expect(res.statusCode).toBe(401);

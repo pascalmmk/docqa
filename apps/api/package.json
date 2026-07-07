@@ -12,8 +12,11 @@
   },
   "dependencies": {
     "@docqa/shared": "workspace:*",
+    "@docqa/storage": "workspace:*",
     "@fastify/multipart": "^9.0.0",
+    "bullmq": "^5.34.0",
     "fastify": "^5.0.0",
+    "ioredis": "^5.4.0",
     "pg": "^8.12.0",
     "pino": "^9.0.0",
     "zod": "^3.23.0"

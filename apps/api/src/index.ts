@@ -1,13 +1,14 @@
+import { storageFromEnv } from "@docqa/storage";
 import { loadConfig } from "./config.js";
 import { buildServer, type ServerDeps } from "./server.js";
 import { createPool, checkDb } from "./db/pool.js";
 import { devUserResolver } from "./auth.js";
 import { pgDocumentsRepo } from "./repositories/documents.js";
-import { diskStorage } from "./storage.js";
-import { noopQueue } from "./queue.js";
+import { noopQueue, bullmqQueue, type IngestQueue } from "./queue.js";
 
 const config = loadConfig();
 const pool = config.DATABASE_URL ? createPool(config.DATABASE_URL) : null;
+let queue: IngestQueue | null = null;
 
 const deps: ServerDeps = {
   config,
@@ -15,24 +16,25 @@ const deps: ServerDeps = {
 };
 
 if (pool) {
+  queue = config.REDIS_URL ? bullmqQueue(config.REDIS_URL) : noopQueue();
   deps.resolveUser = devUserResolver(pool);
   deps.documents = {
     documents: pgDocumentsRepo(pool),
-    storage: diskStorage(config.DATA_DIR),
-    queue: noopQueue(),
+    storage: storageFromEnv(),
+    queue,
   };
 }
 
 const app = buildServer(deps);
-if (!pool) {
-  app.log.warn("DATABASE_URL not set — document routes disabled, health only");
-}
+if (!pool) app.log.warn("DATABASE_URL not set — document routes disabled, health only");
+if (pool && !config.REDIS_URL) app.log.warn("REDIS_URL not set — ingestion jobs are not enqueued");
 
 // Graceful shutdown: stop accepting connections, drain, close pools.
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, "shutting down");
   try {
     await app.close();
+    await queue?.close();
     await pool?.end();
     process.exit(0);
   } catch (err) {

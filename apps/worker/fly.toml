@@ -1,0 +1,14 @@
+# Deploy from repo root: fly deploy -c apps/worker/fly.toml
+# Secrets: fly secrets set -a docqa-worker-floppa DATABASE_URL=... REDIS_URL=... OPENAI_API_KEY=...
+app = "docqa-worker-floppa"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# No [http_service] — the worker serves no HTTP traffic.
+# It must run continuously to consume the queue.
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

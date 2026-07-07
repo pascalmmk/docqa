@@ -29,3 +29,14 @@ export type AskRequest = z.infer<typeof askRequestSchema>;
 
 /** Upload limits (design doc §1) */
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
+/** Ingestion queue contract (API producer ↔ worker consumer) */
+export const INGEST_QUEUE = "ingest";
+
+export interface IngestJobData {
+  documentId: string;
+}
+
+/** Embedding model contract — must match chunks.embedding vector(1536) */
+export const EMBEDDING_MODEL = "text-embedding-3-small";
+export const EMBEDDING_DIM = 1536;
