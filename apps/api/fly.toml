@@ -1,5 +1,5 @@
 # fly launch --no-deploy, then set secrets: fly secrets set DATABASE_URL=... REDIS_URL=...
-app = "docqa-api"
+app = "docqa-api-floppa"
 primary_region = "fra"
 
 [build]
@@ -8,6 +8,7 @@ primary_region = "fra"
 [env]
   PORT = "3001"
   HOST = "0.0.0.0"
+  DATA_DIR = "/app/data"
 
 [http_service]
   internal_port = 3001
