@@ -3,11 +3,13 @@ import { storageFromEnv } from "@docqa/storage";
 import { loadConfig } from "./config.js";
 import { buildServer, type ServerDeps } from "./server.js";
 import { createPool, checkDb } from "./db/pool.js";
-import { devUserResolver } from "./auth.js";
+import { tokenUserResolver } from "./auth.js";
 import { pgDocumentsRepo } from "./repositories/documents.js";
 import { pgConversationsRepo } from "./repositories/conversations.js";
+import { pgUsersRepo } from "./repositories/users.js";
 import { noopQueue, bullmqQueue, type IngestQueue } from "./queue.js";
-import { openaiQuestionEmbedder, openaiChatStreamer } from "./llm.js";
+import { openaiQuestionEmbedder, openaiChatStreamer, openaiCompleter } from "./llm.js";
+import { suggestedQuestions, pgChunkSampler } from "./suggestions.js";
 import { redisKV, memoryKV, cachingEmbedder } from "./cache.js";
 import { allowAll, redisTokenBucket } from "./ratelimit.js";
 import { hybridSearch } from "./retrieval.js";
@@ -24,7 +26,8 @@ const deps: ServerDeps = {
 
 if (pool) {
   queue = config.REDIS_URL ? bullmqQueue(config.REDIS_URL) : noopQueue();
-  deps.resolveUser = devUserResolver(pool);
+  deps.resolveUser = tokenUserResolver(config.AUTH_SECRET);
+  deps.auth = { users: pgUsersRepo(pool), secret: config.AUTH_SECRET };
   deps.documents = {
     documents: pgDocumentsRepo(pool),
     storage: storageFromEnv(),
@@ -47,6 +50,15 @@ if (pool) {
       questionLimiter: redis
         ? redisTokenBucket(redis, { capacity: 20, refillPerSec: 20 / 3600, prefix: "rl:question" })
         : allowAll(),
+    };
+
+    const suggestionDeps = {
+      sample: pgChunkSampler(pool),
+      complete: openaiCompleter(config.OPENAI_API_KEY, config.CHAT_MODEL),
+      kv,
+    };
+    deps.suggestions = {
+      suggest: (userId) => suggestedQuestions(suggestionDeps, userId),
     };
   }
 }

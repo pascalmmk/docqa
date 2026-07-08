@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "migrate": "tsx --env-file=../../.env src/db/migrate.ts",
-    "eval": "tsx --env-file=../../.env src/eval/run.ts"
+    "eval": "tsx --env-file=../../.env src/eval/run.ts",
+    "seed": "tsx --env-file=../../.env src/db/seed.ts"
   },
   "dependencies": {
     "@docqa/shared": "workspace:*",

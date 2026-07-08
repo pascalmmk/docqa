@@ -10,6 +10,7 @@ const envSchema = z.object({
   DATA_DIR: z.string().default("./data"),
   OPENAI_API_KEY: z.string().optional(),
   CHAT_MODEL: z.string().default("gpt-4o-mini"),
+  AUTH_SECRET: z.string().default("dev-secret-change-in-production"),
 });
 
 export type Config = z.infer<typeof envSchema>;

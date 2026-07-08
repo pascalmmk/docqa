@@ -6,8 +6,10 @@ import { MAX_UPLOAD_BYTES } from "@docqa/shared";
 import type { Config } from "./config.js";
 import type { UserResolver } from "./auth.js";
 import { healthRoutes } from "./routes/health.js";
+import { authRoutes, type AuthDeps } from "./routes/auth.js";
 import { documentRoutes, type DocumentsDeps } from "./routes/documents.js";
 import { conversationRoutes, type ConversationsDeps } from "./routes/conversations.js";
+import { suggestionRoutes, type SuggestionsRouteDeps } from "./routes/suggestions.js";
 
 export interface ServerDeps {
   config: Config;
@@ -19,10 +21,14 @@ export interface ServerDeps {
   documents?: DocumentsDeps;
   /** When provided, conversation/chat routes are registered. */
   conversations?: ConversationsDeps;
+  /** When provided, the public login route is registered. */
+  auth?: AuthDeps;
+  /** When provided, GET /suggestions is registered. */
+  suggestions?: SuggestionsRouteDeps;
 }
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const { config, checkReadiness, resolveUser, documents, conversations } = deps;
+  const { config, checkReadiness, resolveUser, documents, conversations, auth, suggestions } = deps;
 
   const app = Fastify({
     logger: {
@@ -57,7 +63,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     checkReadiness: checkReadiness ?? (async () => true),
   });
 
-  if (documents || conversations) {
+  if (auth) app.register(authRoutes, auth);
+
+  if (documents || conversations || suggestions) {
     app.register(async (authed) => {
       authed.addHook("preHandler", async (req, reply) => {
         const userId = resolveUser ? await resolveUser(req) : null;
@@ -71,6 +79,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       });
       if (documents) await documentRoutes(authed, documents);
       if (conversations) await conversationRoutes(authed, conversations);
+      if (suggestions) await suggestionRoutes(authed, suggestions);
     });
   }
 

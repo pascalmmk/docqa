@@ -270,6 +270,84 @@ button:disabled { opacity: 0.5; cursor: default; transform: none; }
 .composer input:focus { outline: none; border-color: var(--accent); }
 .composer input::placeholder { color: var(--muted); }
 
+/* ---------- suggestion chips ---------- */
+
+.chips {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.chips-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.chip {
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  max-width: 480px;
+}
+.chip:hover { border-color: var(--accent); }
+
+/* ---------- login ---------- */
+
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rise 0.3s ease;
+}
+.login-card h1 { font-size: 24px; margin: 0; text-align: center; }
+.login-card .tagline { text-align: center; margin: 0 0 8px; }
+.login-card input {
+  font: inherit;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 11px 14px;
+}
+.login-card input:focus { outline: none; border-color: var(--accent); }
+.login-error { color: var(--err); font-size: 13px; text-align: center; }
+.demo-hint {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  margin: 6px 0 0;
+}
+.demo-hint code {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.logout { color: var(--accent); cursor: pointer; }
+.logout:hover { text-decoration: underline; }
+
 @keyframes rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }

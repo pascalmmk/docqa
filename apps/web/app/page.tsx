@@ -10,7 +10,13 @@ import {
   getConversation,
   deleteConversation,
   askQuestion,
+  getSuggestions,
+  login,
+  getSession,
+  setSession,
+  clearSession,
   RateLimitError,
+  AuthError,
   type DocumentDto,
   type SourceDto,
   type ConversationDto,
@@ -40,39 +46,120 @@ function renderContent(text: string) {
   });
 }
 
+function LoginCard({ onSuccess }: { onSuccess: (username: string) => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await login(username.trim(), password);
+      setSession(res.token, res.user.username);
+      onSuccess(res.user.username);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "login failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="login-wrap">
+      <form className="login-card" onSubmit={onSubmit}>
+        <h1>
+          <span className="logo">◆</span> DocQA
+        </h1>
+        <p className="tagline">Sign in to your workspace.</p>
+        <input
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoFocus
+        />
+        <input
+          placeholder="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {error && <div className="login-error">{error}</div>}
+        <button className="primary" type="submit" disabled={busy || !username || !password}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+        <p className="demo-hint">
+          Demo accounts: <code>alice</code>, <code>bob</code>, or <code>charlie</code> — password{" "}
+          <code>demo1234</code>
+        </p>
+      </form>
+    </div>
+  );
+}
+
 export default function Home() {
+  const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentDto[]>([]);
   const [conversations, setConversations] = useState<ConversationDto[]>([]);
   const [activeConvo, setActiveConvo] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  function logout() {
+    clearSession();
+    setUser(null);
+    setDocuments([]);
+    setConversations([]);
+    setMessages([]);
+    setActiveConvo(null);
+  }
+
+  const guard = useCallback((err: unknown, fallback: string) => {
+    if (err instanceof AuthError) {
+      logout();
+      return;
+    }
+    setBanner(err instanceof Error ? err.message : fallback);
+  }, []);
+
   const refreshDocuments = useCallback(async () => {
     try {
       setDocuments(await listDocuments());
       setBanner((b) => (b === "API unreachable — is the server running?" ? null : b));
-    } catch {
-      setBanner("API unreachable — is the server running?");
+    } catch (err) {
+      if (err instanceof AuthError) logout();
+      else setBanner("API unreachable — is the server running?");
     }
   }, []);
 
   const refreshConversations = useCallback(async () => {
     try {
       setConversations(await listConversations());
-    } catch {
-      /* banner already handled by documents fetch */
+    } catch (err) {
+      if (err instanceof AuthError) logout();
     }
   }, []);
 
   useEffect(() => {
     setTheme((document.documentElement.dataset.theme as "light" | "dark") ?? "dark");
+    const session = getSession();
+    if (session) setUser(session.username);
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
     void refreshDocuments();
     void refreshConversations();
-  }, [refreshDocuments, refreshConversations]);
+  }, [user, refreshDocuments, refreshConversations]);
 
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
@@ -88,6 +175,17 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [documents, refreshDocuments]);
 
+  // Refresh suggested questions once all ingestion has settled.
+  useEffect(() => {
+    if (!user) return;
+    if (!documents.some((d) => d.status === "ready")) {
+      setSuggestions([]);
+      return;
+    }
+    if (documents.some((d) => d.status === "queued" || d.status === "processing")) return;
+    void getSuggestions().then(setSuggestions).catch(() => setSuggestions([]));
+  }, [user, documents]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -101,13 +199,17 @@ export default function Home() {
   async function openConversation(id: string) {
     if (streaming) return;
     setBanner(null);
-    const convo = await getConversation(id);
-    if (!convo) {
-      await refreshConversations();
-      return;
+    try {
+      const convo = await getConversation(id);
+      if (!convo) {
+        await refreshConversations();
+        return;
+      }
+      setActiveConvo(id);
+      setMessages(convo.messages.map((m) => ({ role: m.role, content: m.content })));
+    } catch (err) {
+      guard(err, "failed to load conversation");
     }
-    setActiveConvo(id);
-    setMessages(convo.messages.map((m) => ({ role: m.role, content: m.content })));
   }
 
   async function removeConversation(id: string) {
@@ -125,13 +227,12 @@ export default function Home() {
       await uploadDocument(file);
       await refreshDocuments();
     } catch (err) {
-      setBanner(err instanceof Error ? err.message : "upload failed");
+      guard(err, "upload failed");
     }
   }
 
-  async function onAsk(e: React.FormEvent) {
-    e.preventDefault();
-    const q = question.trim();
+  async function ask(qRaw: string) {
+    const q = qRaw.trim();
     if (!q || streaming) return;
     setQuestion("");
     setBanner(null);
@@ -173,12 +274,20 @@ export default function Home() {
       if (err instanceof RateLimitError) {
         setBanner(`Rate limit reached — try again in ${Math.ceil(err.retryAfterSec / 60)} min.`);
       } else {
-        setBanner(err instanceof Error ? err.message : "request failed");
+        guard(err, "request failed");
       }
     } finally {
       setStreaming(false);
     }
   }
+
+  function onAsk(e: React.FormEvent) {
+    e.preventDefault();
+    void ask(question);
+  }
+
+  if (!ready) return null;
+  if (!user) return <LoginCard onSuccess={(u) => setUser(u)} />;
 
   const lastIdx = messages.length - 1;
 
@@ -198,7 +307,12 @@ export default function Home() {
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
         </div>
-        <p className="tagline">Ask questions about your documents, with citations.</p>
+        <p className="tagline">
+          Signed in as <b>{user}</b> ·{" "}
+          <a className="logout" onClick={logout}>
+            sign out
+          </a>
+        </p>
 
         <button className="primary" onClick={newChat} disabled={streaming} type="button">
           + New chat
@@ -259,6 +373,16 @@ export default function Home() {
                 <br />
                 then ask anything about it.
               </p>
+              {suggestions.length > 0 && (
+                <div className="chips">
+                  <span className="chips-label">Try asking:</span>
+                  {suggestions.map((q) => (
+                    <button key={q} className="chip" type="button" onClick={() => void ask(q)}>
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {messages.map((m, i) => (

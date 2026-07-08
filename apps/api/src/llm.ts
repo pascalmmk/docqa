@@ -55,6 +55,22 @@ export interface ChatStreamer {
   stream(messages: ChatMessage[]): AsyncIterable<string>;
 }
 
+export type ChatCompleter = (messages: ChatMessage[]) => Promise<string>;
+
+/** Non-streaming completion (suggestions, judging — anything short). */
+export function openaiCompleter(apiKey: string, model = "gpt-4o-mini"): ChatCompleter {
+  return async (messages) => {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ model, messages, temperature: 0.7 }),
+    });
+    if (!res.ok) throw new Error(`chat API ${res.status}`);
+    const json = (await res.json()) as { choices: { message: { content: string } }[] };
+    return json.choices[0]?.message.content ?? "";
+  };
+}
+
 /** Streams completion tokens from OpenAI chat completions (SSE). */
 export function openaiChatStreamer(apiKey: string, model = "gpt-4o-mini"): ChatStreamer {
   return {

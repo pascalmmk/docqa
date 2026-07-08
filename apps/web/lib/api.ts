@@ -33,7 +33,59 @@ export class RateLimitError extends Error {
   }
 }
 
+export class AuthError extends Error {
+  constructor() {
+    super("session expired — please sign in again");
+  }
+}
+
+/* ---------- session token ---------- */
+
+const TOKEN_KEY = "docqa-token";
+const USER_KEY = "docqa-user";
+
+export function getSession(): { token: string; username: string } | null {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const username = localStorage.getItem(USER_KEY);
+  return token && username ? { token, username } : null;
+}
+
+export function setSession(token: string, username: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, username);
+}
+
+export function clearSession(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+export async function login(
+  username: string,
+  password: string,
+): Promise<{ token: string; user: { username: string } }> {
+  const res = await fetch(`${API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { title?: string } | null;
+    throw new Error(body?.title ?? "login failed");
+  }
+  return res.json();
+}
+
 async function ok(res: Response): Promise<Response> {
+  if (res.status === 401) {
+    clearSession();
+    throw new AuthError();
+  }
   if (res.status === 429) {
     throw new RateLimitError(Number(res.headers.get("retry-after") ?? 60));
   }
@@ -45,17 +97,21 @@ async function ok(res: Response): Promise<Response> {
 }
 
 export async function listDocuments(): Promise<DocumentDto[]> {
-  return (await ok(await fetch(`${API_URL}/documents`))).json();
+  return (await ok(await fetch(`${API_URL}/documents`, { headers: authHeaders() }))).json();
 }
 
 export async function uploadDocument(file: File): Promise<DocumentDto> {
   const form = new FormData();
   form.append("file", file);
-  return (await ok(await fetch(`${API_URL}/documents`, { method: "POST", body: form }))).json();
+  return (
+    await ok(
+      await fetch(`${API_URL}/documents`, { method: "POST", body: form, headers: authHeaders() }),
+    )
+  ).json();
 }
 
 export async function deleteDocument(id: string): Promise<void> {
-  await ok(await fetch(`${API_URL}/documents/${id}`, { method: "DELETE" }));
+  await ok(await fetch(`${API_URL}/documents/${id}`, { method: "DELETE", headers: authHeaders() }));
 }
 
 export interface ConversationDto {
@@ -65,11 +121,13 @@ export interface ConversationDto {
 }
 
 export async function listConversations(): Promise<ConversationDto[]> {
-  return (await ok(await fetch(`${API_URL}/conversations`))).json();
+  return (await ok(await fetch(`${API_URL}/conversations`, { headers: authHeaders() }))).json();
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  await ok(await fetch(`${API_URL}/conversations/${id}`, { method: "DELETE" }));
+  await ok(
+    await fetch(`${API_URL}/conversations/${id}`, { method: "DELETE", headers: authHeaders() }),
+  );
 }
 
 export async function createConversation(): Promise<{ id: string }> {
@@ -77,7 +135,7 @@ export async function createConversation(): Promise<{ id: string }> {
     await ok(
       await fetch(`${API_URL}/conversations`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...authHeaders() },
         body: "{}",
       }),
     )
@@ -87,9 +145,15 @@ export async function createConversation(): Promise<{ id: string }> {
 export async function getConversation(
   id: string,
 ): Promise<{ id: string; messages: MessageDto[] } | null> {
-  const res = await fetch(`${API_URL}/conversations/${id}`);
+  const res = await fetch(`${API_URL}/conversations/${id}`, { headers: authHeaders() });
   if (res.status === 404) return null;
   return (await ok(res)).json();
+}
+
+export async function getSuggestions(): Promise<string[]> {
+  const res = await ok(await fetch(`${API_URL}/suggestions`, { headers: authHeaders() }));
+  const body = (await res.json()) as { questions: string[] };
+  return body.questions;
 }
 
 export interface StreamHandlers {
@@ -107,7 +171,7 @@ export async function askQuestion(
   const res = await ok(
     await fetch(`${API_URL}/conversations/${conversationId}/messages`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify({ question }),
     }),
   );
