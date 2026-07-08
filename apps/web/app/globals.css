@@ -217,6 +217,38 @@ button:disabled { opacity: 0.5; cursor: default; transform: none; }
   margin: 0 2px;
   vertical-align: 2px;
 }
+.cite.clickable { cursor: pointer; }
+.cite.clickable:hover { background: var(--accent); color: #fff; }
+
+.source-view {
+  margin-top: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--panel-2);
+  overflow: hidden;
+  animation: rise 0.2s ease;
+}
+.source-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.source-head b { color: var(--accent); }
+.source-body {
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  max-height: 260px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.source-link { cursor: pointer; }
+.source-link:hover { color: var(--accent); }
 
 .thinking { display: inline-flex; gap: 5px; padding: 4px 0; }
 .thinking span {

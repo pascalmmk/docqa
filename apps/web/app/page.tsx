@@ -31,13 +31,18 @@ interface ChatMessage {
 
 const THEME_KEY = "docqa-theme";
 
-/** Render [n] citation markers as styled badges. */
-function renderContent(text: string) {
+/** Render [n] citation markers as clickable badges. */
+function renderContent(text: string, onCite?: (marker: number) => void) {
   const parts = text.split(/(\[\d{1,2}\])/g);
   return parts.map((part, i) => {
     const m = part.match(/^\[(\d{1,2})\]$/);
     return m ? (
-      <sup className="cite" key={i}>
+      <sup
+        className={`cite ${onCite ? "clickable" : ""}`}
+        key={i}
+        onClick={onCite ? () => onCite(Number(m[1])) : undefined}
+        title="Show source"
+      >
         {m[1]}
       </sup>
     ) : (
@@ -111,6 +116,7 @@ export default function Home() {
   const [streaming, setStreaming] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [openSource, setOpenSource] = useState<{ msg: number; marker: number } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   function logout() {
@@ -194,6 +200,7 @@ export default function Home() {
     setActiveConvo(null);
     setMessages([]);
     setBanner(null);
+    setOpenSource(null);
   }
 
   async function openConversation(id: string) {
@@ -206,7 +213,23 @@ export default function Home() {
         return;
       }
       setActiveConvo(id);
-      setMessages(convo.messages.map((m) => ({ role: m.role, content: m.content })));
+      setOpenSource(null);
+      setMessages(
+        convo.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          sources: m.citations
+            .filter((c) => c.content != null)
+            .map((c) => ({
+              marker: c.marker,
+              chunkId: c.chunkId,
+              documentId: c.documentId ?? "",
+              seq: c.seq ?? 0,
+              preview: (c.content ?? "").slice(0, 200),
+              content: c.content ?? "",
+            })),
+        })),
+      );
     } catch (err) {
       guard(err, "failed to load conversation");
     }
@@ -385,30 +408,57 @@ export default function Home() {
               )}
             </div>
           )}
-          {messages.map((m, i) => (
-            <div key={i} className={`msg ${m.role}`}>
-              {m.role === "assistant" && !m.content && streaming && i === lastIdx ? (
-                <span className="thinking">
-                  <span />
-                  <span />
-                  <span />
-                </span>
-              ) : (
-                renderContent(m.content)
-              )}
-              {m.degraded && <div className="banner">{m.degraded}</div>}
-              {m.sources && m.sources.length > 0 && (
-                <details className="sources">
-                  <summary>{m.sources.length} sources</summary>
-                  <ol>
-                    {m.sources.map((s) => (
-                      <li key={s.chunkId}>{s.preview}…</li>
-                    ))}
-                  </ol>
-                </details>
-              )}
-            </div>
-          ))}
+          {messages.map((m, i) => {
+            const shown =
+              openSource?.msg === i
+                ? m.sources?.find((s) => s.marker === openSource.marker)
+                : undefined;
+            const toggle = (marker: number) =>
+              setOpenSource((cur) =>
+                cur?.msg === i && cur.marker === marker ? null : { msg: i, marker },
+              );
+            return (
+              <div key={i} className={`msg ${m.role}`}>
+                {m.role === "assistant" && !m.content && streaming && i === lastIdx ? (
+                  <span className="thinking">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                ) : (
+                  renderContent(m.content, m.sources?.length ? toggle : undefined)
+                )}
+                {m.degraded && <div className="banner">{m.degraded}</div>}
+                {shown && (
+                  <div className="source-view">
+                    <div className="source-head">
+                      <span>
+                        Source <b>[{shown.marker}]</b> · passage {shown.seq + 1}
+                      </span>
+                      <button className="del" type="button" onClick={() => setOpenSource(null)}>
+                        ✕
+                      </button>
+                    </div>
+                    <div className="source-body">{shown.content}</div>
+                  </div>
+                )}
+                {m.sources && m.sources.length > 0 && (
+                  <details className="sources">
+                    <summary>{m.sources.length} sources</summary>
+                    <ol>
+                      {m.sources.map((s) => (
+                        <li key={s.chunkId}>
+                          <a className="source-link" onClick={() => toggle(s.marker)}>
+                            {s.preview}…
+                          </a>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                )}
+              </div>
+            );
+          })}
           <div ref={bottomRef} />
         </div>
         {banner && <div className="banner">{banner}</div>}

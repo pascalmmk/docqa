@@ -15,8 +15,17 @@ export interface MessageRow {
   created_at: Date;
 }
 
+export interface CitationDetail {
+  marker: number;
+  chunkId: string;
+  /** Chunk fields are null if the underlying chunk/document was deleted. */
+  content: string | null;
+  seq: number | null;
+  documentId: string | null;
+}
+
 export interface MessageWithCitations extends MessageRow {
-  citations: { marker: number; chunkId: string }[];
+  citations: CitationDetail[];
 }
 
 export interface ConversationsRepo {
@@ -81,17 +90,28 @@ export function pgConversationsRepo(pool: pg.Pool): ConversationsRepo {
         message_id: string;
         chunk_id: string;
         marker: number;
+        content: string | null;
+        seq: number | null;
+        document_id: string | null;
       }>(
-        `SELECT ct.message_id, ct.chunk_id, ct.marker
+        `SELECT ct.message_id, ct.chunk_id, ct.marker,
+                ch.content, ch.seq, ch.document_id
          FROM citations ct
          JOIN messages m ON m.id = ct.message_id
+         LEFT JOIN chunks ch ON ch.id = ct.chunk_id
          WHERE m.conversation_id = $1`,
         [conversationId],
       );
-      const byMessage = new Map<string, { marker: number; chunkId: string }[]>();
+      const byMessage = new Map<string, CitationDetail[]>();
       for (const c of citations) {
         const list = byMessage.get(c.message_id) ?? [];
-        list.push({ marker: c.marker, chunkId: c.chunk_id });
+        list.push({
+          marker: c.marker,
+          chunkId: c.chunk_id,
+          content: c.content,
+          seq: c.seq,
+          documentId: c.document_id,
+        });
         byMessage.set(c.message_id, list);
       }
       return messages.map((m) => ({

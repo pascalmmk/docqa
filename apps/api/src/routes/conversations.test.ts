@@ -52,7 +52,13 @@ function memoryConversations() {
           ...m,
           citations: citations
             .filter((c) => c.message_id === m.id)
-            .map((c) => ({ marker: c.marker, chunkId: c.chunk_id })),
+            .map((c) => ({
+              marker: c.marker,
+              chunkId: c.chunk_id,
+              content: "cited chunk content",
+              seq: 0,
+              documentId: "doc-1",
+            })),
         }));
     },
     async recentMessages(conversationId, limit) {

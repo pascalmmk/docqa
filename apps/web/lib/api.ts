@@ -17,13 +17,22 @@ export interface SourceDto {
   documentId: string;
   seq: number;
   preview: string;
+  content: string;
+}
+
+export interface CitationDto {
+  marker: number;
+  chunkId: string;
+  content: string | null;
+  seq: number | null;
+  documentId: string | null;
 }
 
 export interface MessageDto {
   id: string;
   role: "user" | "assistant";
   content: string;
-  citations: { marker: number; chunkId: string }[];
+  citations: CitationDto[];
   createdAt: string;
 }
 

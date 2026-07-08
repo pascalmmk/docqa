@@ -121,6 +121,7 @@ export async function conversationRoutes(app: FastifyInstance, deps: Conversatio
           documentId: c.documentId,
           seq: c.seq,
           preview: c.content.slice(0, 200),
+          content: c.content,
         })),
       });
 
